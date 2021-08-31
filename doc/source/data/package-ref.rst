@@ -13,12 +13,14 @@ Creating a Dataset
 .. autofunction:: ray.data.read_text
 .. autofunction:: ray.data.read_binary_files
 .. autofunction:: ray.data.read_datasource
+.. autofunction:: ray.data.from_items
 .. autofunction:: ray.data.from_arrow
 .. autofunction:: ray.data.from_spark
 .. autofunction:: ray.data.from_dask
 .. autofunction:: ray.data.from_modin
 .. autofunction:: ray.data.from_mars
 .. autofunction:: ray.data.from_pandas
+.. autofunction:: ray.data.from_numpy
 
 Dataset API
 -----------
@@ -29,7 +31,7 @@ Dataset API
 DatasetPipeline API
 -------------------
 
-.. autoclass:: ray.experimental.data.dataset_pipeline.DatasetPipeline
+.. autoclass:: ray.data.dataset_pipeline.DatasetPipeline
     :members:
 
 Custom Datasource API
@@ -39,9 +41,6 @@ Custom Datasource API
     :members:
 
 .. autoclass:: ray.data.ReadTask
-    :members:
-
-.. autoclass:: ray.data.WriteTask
     :members:
 
 Utility
