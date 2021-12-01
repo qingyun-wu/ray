@@ -13,6 +13,7 @@
 // limitations under the License.
 
 syntax = "proto3";
+option cc_enable_arenas = true;
 
 package ray.rpc;
 
@@ -54,6 +55,15 @@ message ActorHandle {
 
   // How many times tasks may be retried on this actor if the actor fails.
   int64 max_task_retries = 9;
+
+  // The name of the actor.
+  string name = 10;
+
+  // The namespace that this actor belongs to.
+  string ray_namespace = 11;
+
+  // Whether the actor supports out of order execution.
+  bool execute_out_of_order = 12;
 }
 
 message ReturnObject {
@@ -329,14 +339,6 @@ message ExitReply {
   bool success = 1;
 }
 
-message RunOnUtilWorkerRequest {
-  string request = 1;
-  repeated string args = 2;
-}
-
-message RunOnUtilWorkerReply {
-}
-
 message AssignObjectOwnerRequest {
   // The ID of added object.
   bytes object_id = 1;
@@ -404,8 +406,6 @@ service CoreWorkerService {
   rpc AddSpilledUrl(AddSpilledUrlRequest) returns (AddSpilledUrlReply);
   // Notification from raylet that an object ID is available in local plasma.
   rpc PlasmaObjectReady(PlasmaObjectReadyRequest) returns (PlasmaObjectReadyReply);
-  // Run a request on io worker
-  rpc RunOnUtilWorker(RunOnUtilWorkerRequest) returns (RunOnUtilWorkerReply);
   // Request for a worker to exit.
   rpc Exit(ExitRequest) returns (ExitReply);
   // Assign the owner of an object to the intended worker.
