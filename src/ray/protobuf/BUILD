@@ -75,7 +75,7 @@ proto_library(
 )
 
 cc_proto_library(
-    name = "loggings_cc_proto",
+    name = "logging_cc_proto",
     deps = [":logging_proto"],
 )
 
@@ -267,6 +267,7 @@ proto_library(
         ":dependency_proto",
         ":gcs_proto",
         ":logging_proto",
+        ":reporter_proto",
     ],
 )
 
@@ -282,6 +283,7 @@ proto_library(
     deps = [
         ":common_proto",
         ":agent_manager_proto",
+        ":runtime_env_common_proto",
     ],
 )
 

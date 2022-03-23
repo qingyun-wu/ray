@@ -18,6 +18,7 @@
 #include <sstream>
 
 #include "ray/common/ray_config.h"
+#include "ray/common/runtime_env_common.h"
 #include "ray/util/logging.h"
 
 namespace ray {
@@ -61,12 +62,31 @@ SchedulingClass TaskSpecification::GetSchedulingClass(
 }
 
 const BundleID TaskSpecification::PlacementGroupBundleId() const {
-  return std::make_pair(PlacementGroupID::FromBinary(message_->placement_group_id()),
-                        message_->placement_group_bundle_index());
+  if (message_->scheduling_strategy().scheduling_strategy_case() ==
+      rpc::SchedulingStrategy::SchedulingStrategyCase::
+          kPlacementGroupSchedulingStrategy) {
+    return std::make_pair(
+        PlacementGroupID::FromBinary(message_->scheduling_strategy()
+                                         .placement_group_scheduling_strategy()
+                                         .placement_group_id()),
+        message_->scheduling_strategy()
+            .placement_group_scheduling_strategy()
+            .placement_group_bundle_index());
+  } else {
+    return std::make_pair(PlacementGroupID::Nil(), -1);
+  }
 }
 
 bool TaskSpecification::PlacementGroupCaptureChildTasks() const {
-  return message_->placement_group_capture_child_tasks();
+  if (message_->scheduling_strategy().scheduling_strategy_case() ==
+      rpc::SchedulingStrategy::SchedulingStrategyCase::
+          kPlacementGroupSchedulingStrategy) {
+    return message_->scheduling_strategy()
+        .placement_group_scheduling_strategy()
+        .placement_group_capture_child_tasks();
+  } else {
+    return false;
+  }
 }
 
 void TaskSpecification::ComputeResources() {
@@ -144,16 +164,27 @@ std::string TaskSpecification::SerializedRuntimeEnv() const {
   return message_->runtime_env_info().serialized_runtime_env();
 }
 
-bool TaskSpecification::HasRuntimeEnv() const {
-  return !(SerializedRuntimeEnv() == "{}" || SerializedRuntimeEnv().empty());
+rpc::RuntimeEnvConfig TaskSpecification::RuntimeEnvConfig() const {
+  return message_->runtime_env_info().runtime_env_config();
 }
+
+bool TaskSpecification::HasRuntimeEnv() const {
+  return !IsRuntimeEnvEmpty(SerializedRuntimeEnv());
+}
+
+uint64_t TaskSpecification::AttemptNumber() const { return message_->attempt_number(); }
 
 int TaskSpecification::GetRuntimeEnvHash() const {
   absl::flat_hash_map<std::string, double> required_resource;
   if (RayConfig::instance().worker_resource_limits_enabled()) {
     required_resource = GetRequiredResources().GetResourceMap();
   }
-  WorkerCacheKey env = {SerializedRuntimeEnv(), required_resource};
+  WorkerCacheKey env = {
+      SerializedRuntimeEnv(),
+      required_resource,
+      IsActorCreationTask() && RayConfig::instance().isolate_workers_across_task_types(),
+      GetRequiredResources().GetResource("GPU") > 0 &&
+          RayConfig::instance().isolate_workers_across_resource_types()};
   return env.IntHash();
 }
 
@@ -425,9 +456,13 @@ std::string TaskSpecification::CallSiteString() const {
 
 WorkerCacheKey::WorkerCacheKey(
     const std::string serialized_runtime_env,
-    const absl::flat_hash_map<std::string, double> &required_resources)
+    const absl::flat_hash_map<std::string, double> &required_resources,
+    bool is_actor,
+    bool is_gpu)
     : serialized_runtime_env(serialized_runtime_env),
-      required_resources(std::move(required_resources)) {}
+      required_resources(std::move(required_resources)),
+      is_actor(is_actor),
+      is_gpu(is_gpu) {}
 
 bool WorkerCacheKey::operator==(const WorkerCacheKey &k) const {
   // FIXME we should compare fields
@@ -435,8 +470,8 @@ bool WorkerCacheKey::operator==(const WorkerCacheKey &k) const {
 }
 
 bool WorkerCacheKey::EnvIsEmpty() const {
-  return (serialized_runtime_env == "" || serialized_runtime_env == "{}") &&
-         required_resources.empty();
+  return IsRuntimeEnvEmpty(serialized_runtime_env) && required_resources.empty() &&
+         !is_gpu;
 }
 
 std::size_t WorkerCacheKey::Hash() const {
@@ -445,9 +480,15 @@ std::size_t WorkerCacheKey::Hash() const {
     if (EnvIsEmpty()) {
       // It's useful to have the same predetermined value for both unspecified and empty
       // runtime envs.
-      hash_ = 0;
+      if (is_actor) {
+        hash_ = 1;
+      } else {
+        hash_ = 0;
+      }
     } else {
       boost::hash_combine(hash_, serialized_runtime_env);
+      boost::hash_combine(hash_, is_actor);
+      boost::hash_combine(hash_, is_gpu);
 
       std::vector<std::pair<std::string, double>> resource_vars(
           required_resources.begin(), required_resources.end());

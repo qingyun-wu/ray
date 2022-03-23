@@ -59,6 +59,14 @@ class ActorPool:
             ...                     [1, 2, 3, 4])))
             [2, 4, 6, 8]
         """
+        # Ignore/Cancel all the previous submissions
+        # by calling `has_next` and `gen_next` repeteadly.
+        while self.has_next():
+            try:
+                self.get_next(timeout=0)
+            except TimeoutError:
+                pass
+
         for v in values:
             self.submit(fn, v)
         while self.has_next():
@@ -87,6 +95,14 @@ class ActorPool:
             ...                               [1, 2, 3, 4])))
             [6, 2, 4, 8]
         """
+        # Ignore/Cancel all the previous submissions
+        # by calling `has_next` and `gen_next_unordered` repeteadly.
+        while self.has_next():
+            try:
+                self.get_next_unordered(timeout=0)
+            except TimeoutError:
+                pass
+
         for v in values:
             self.submit(fn, v)
         while self.has_next():
@@ -161,8 +177,9 @@ class ActorPool:
         if not self.has_next():
             raise StopIteration("No more results to get")
         if self._next_return_index >= self._next_task_index:
-            raise ValueError("It is not allowed to call get_next() after "
-                             "get_next_unordered().")
+            raise ValueError(
+                "It is not allowed to call get_next() after get_next_unordered()."
+            )
         future = self._index_to_future[self._next_return_index]
         if timeout is not None:
             res, _ = ray.wait([future], timeout=timeout)
@@ -203,8 +220,7 @@ class ActorPool:
         if not self.has_next():
             raise StopIteration("No more results to get")
         # TODO(ekl) bulk wait for performance
-        res, _ = ray.wait(
-            list(self._future_to_actor), num_returns=1, timeout=timeout)
+        res, _ = ray.wait(list(self._future_to_actor), num_returns=1, timeout=timeout)
         if res:
             [future] = res
         else:
