@@ -1,10 +1,12 @@
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 
+from ray.tune.syncer import SyncConfig
 from ray.util import PublicAPI
 
-from ray.tune.trainable import PlacementGroupFactory
-from ray.tune.callback import Callback
+if TYPE_CHECKING:
+    from ray.tune.trainable import PlacementGroupFactory
+    from ray.tune.callback import Callback
 
 
 ScalingConfig = Dict[str, Any]
@@ -81,8 +83,10 @@ class ScalingConfigDataClass:
             if k not in ["CPU", "GPU"]
         }
 
-    def as_placement_group_factory(self) -> PlacementGroupFactory:
+    def as_placement_group_factory(self) -> "PlacementGroupFactory":
         """Returns a PlacementGroupFactory to specify resources for Tune."""
+        from ray.tune.trainable import PlacementGroupFactory
+
         trainer_resources = (
             self.trainer_resources if self.trainer_resources else {"CPU": 1}
         )
@@ -125,6 +129,9 @@ class RunConfig:
     This includes both running a Trainable by itself or running a hyperparameter
     tuning job on top of a Trainable (applies to each trial).
 
+    At resume, Ray Tune will automatically apply the same run config so that resumed
+    run uses the same run config as the original run.
+
     Args:
         name: Name of the trial or experiment. If not provided, will be deduced
             from the Trainable.
@@ -132,13 +139,17 @@ class RunConfig:
             Defaults to ``~/ray_results``.
         callbacks: Callbacks to invoke.
             Refer to ray.tune.callback.Callback for more info.
+            Callbacks should be serializable.
+            Currently only stateless callbacks are supported for resumed runs.
+            (any state of the callback will not be checkpointed by Tune
+            and thus will not take effect in resumed runs).
+        failure: The failure mode configuration.
+        sync_config: Configuration object for syncing. See tune.SyncConfig.
     """
 
-    # TODO(xwjiang): Clarify RunConfig behavior across resume. Is one supposed to
-    #  reapply some of the args here? For callbacks, how do we enforce only stateless
-    #  callbacks?
     # TODO(xwjiang): Add more.
     name: Optional[str] = None
     local_dir: Optional[str] = None
-    callbacks: Optional[List[Callback]] = None
+    callbacks: Optional[List["Callback"]] = None
     failure: Optional[FailureConfig] = None
+    sync_config: Optional[SyncConfig] = None
